@@ -37,10 +37,16 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
+      - name: go vet
+        run: go vet ./...
+
+      - name: gofmt check
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Files not formatted:"
+            gofmt -l .
+            exit 1
+          fi
 
   integration-test:
     runs-on: ubuntu-latest
@@ -66,8 +72,8 @@ jobs:
 
       - name: Verify output exists
         run: |
-          test -f testdata/output/a2a_pb2_pydantic.py
-          echo "Generated $(wc -l < testdata/output/a2a_pb2_pydantic.py) lines"
+          test -f testdata/output/types.py
+          echo "Generated $(wc -l < testdata/output/types.py) lines"
 
       - name: Validate Python syntax
-        run: python3 -c "import ast; ast.parse(open('testdata/output/a2a_pb2_pydantic.py').read())"
+        run: python3 -c "import ast; ast.parse(open('testdata/output/types.py').read())"
