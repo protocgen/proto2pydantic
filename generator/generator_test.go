@@ -198,3 +198,80 @@ func TestOutputFilename(t *testing.T) {
 		})
 	}
 }
+
+func TestTopologicalSort(t *testing.T) {
+	tests := []struct {
+		name     string
+		models   []PydanticModel
+		expected []string // expected order of model names
+	}{
+		{
+			"linear chain: C depends on B depends on A",
+			[]PydanticModel{
+				{Name: "C", Fields: []PydanticField{{PythonType: "B"}}},
+				{Name: "B", Fields: []PydanticField{{PythonType: "A"}}},
+				{Name: "A", Fields: []PydanticField{{PythonType: "str"}}},
+			},
+			[]string{"A", "B", "C"},
+		},
+		{
+			"already sorted",
+			[]PydanticModel{
+				{Name: "A", Fields: []PydanticField{{PythonType: "str"}}},
+				{Name: "B", Fields: []PydanticField{{PythonType: "A"}}},
+			},
+			[]string{"A", "B"},
+		},
+		{
+			"independent models preserve order",
+			[]PydanticModel{
+				{Name: "X", Fields: []PydanticField{{PythonType: "str"}}},
+				{Name: "Y", Fields: []PydanticField{{PythonType: "int"}}},
+				{Name: "Z", Fields: []PydanticField{{PythonType: "bool"}}},
+			},
+			[]string{"X", "Y", "Z"},
+		},
+		{
+			"list reference",
+			[]PydanticModel{
+				{Name: "Parent", Fields: []PydanticField{{PythonType: "list[Child]"}}},
+				{Name: "Child", Fields: []PydanticField{{PythonType: "str"}}},
+			},
+			[]string{"Child", "Parent"},
+		},
+		{
+			"optional reference",
+			[]PydanticModel{
+				{Name: "Outer", Fields: []PydanticField{{PythonType: "Inner | None"}}},
+				{Name: "Inner", Fields: []PydanticField{{PythonType: "str"}}},
+			},
+			[]string{"Inner", "Outer"},
+		},
+		{
+			"single model",
+			[]PydanticModel{
+				{Name: "Solo", Fields: []PydanticField{{PythonType: "str"}}},
+			},
+			[]string{"Solo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sorted := topologicalSort(tt.models)
+			if len(sorted) != len(tt.expected) {
+				t.Fatalf("got %d models, want %d", len(sorted), len(tt.expected))
+			}
+			for i, name := range tt.expected {
+				if sorted[i].Name != name {
+					var gotNames []string
+					for _, m := range sorted {
+						gotNames = append(gotNames, m.Name)
+					}
+					t.Errorf("got order %v, want %v", gotNames, tt.expected)
+					break
+				}
+			}
+		})
+	}
+}
