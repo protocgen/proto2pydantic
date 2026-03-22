@@ -38,7 +38,7 @@ jobs:
           ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
         run: |
           set -euo pipefail
-          hashes=$(cat <(echo -E "$ARTIFACTS") | jq -r '.[] | select(.type == "Archive" or .type == "Checksum") | .path' | xargs sha256sum | base64 -w0)
+          hashes=$(echo -E "$ARTIFACTS" | jq -r '.[] | select(.type == "Archive" or .type == "Checksum") | .path' | xargs sha256sum | base64 -w0)
           echo "hashes=$hashes" >> "$GITHUB_OUTPUT"
 
   provenance:
@@ -64,7 +64,7 @@ jobs:
 
       - name: Docker build
         run: |
-          docker build -t plugins.buf.build/protocgen/proto2pydantic:${GITHUB_REF_NAME#v} .
+          docker build -t "plugins.buf.build/protocgen/proto2pydantic:${GITHUB_REF_NAME#v}" .
 
       - name: Push to BSR
         if: env.BUF_TOKEN != ''
@@ -74,4 +74,4 @@ jobs:
           echo "$BUF_TOKEN" | buf registry login --token-stdin
           buf beta registry plugin push \
             --visibility public \
-            --image plugins.buf.build/protocgen/proto2pydantic:${GITHUB_REF_NAME#v}
+            --image "plugins.buf.build/protocgen/proto2pydantic:${GITHUB_REF_NAME#v}"
