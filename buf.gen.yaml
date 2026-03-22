@@ -1,0 +1,12 @@
+version: v2
+inputs:
+  - git_repo: https://github.com/a2aproject/A2A.git
+    ref: main
+    subdir: specification
+plugins:
+  - local: protoc-gen-proto2pydantic
+    out: testdata/output
+    opt:
+      - base_class=a2a._base.A2ABaseModel
+      - alias_generator=camel
+      - output_file=types.py
