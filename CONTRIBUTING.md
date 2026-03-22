@@ -5,23 +5,32 @@ Thank you for your interest in contributing!
 ## Development Setup
 
 1. **Prerequisites**: [Nix](https://nixos.org/download.html) (recommended) or Go 1.25+, buf, protoc
-2. **Enter dev shell**:
+2. **Enter dev shell** (pick one):
    ```bash
+   # Option A: direnv (auto-activates when you cd into the repo)
+   direnv allow
+
+   # Option B: manual
    nix develop
    ```
-   This installs Go, buf, protoc, pre-commit hooks, and all dev tools automatically.
+   Both install Go 1.25, buf, protoc, gh, golangci-lint, and pre-commit automatically.
 
-3. **Build**:
+3. **Pre-commit hooks** are installed automatically by the shell. They run `gofmt`, `go vet`, and `go mod tidy` on every commit. To run manually:
+   ```bash
+   pre-commit run --all-files
+   ```
+
+4. **Build**:
    ```bash
    go build -o protoc-gen-proto2pydantic .
    ```
 
-4. **Test**:
+5. **Test**:
    ```bash
    go test ./... -v
    ```
 
-5. **Regenerate golden file** (after changing generator logic):
+6. **Regenerate golden file** (after changing generator logic):
    ```bash
    cd testdata/proto && buf generate
    ```
