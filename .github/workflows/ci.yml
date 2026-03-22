@@ -30,7 +30,7 @@ jobs:
 
       - name: govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
           govulncheck ./...
 
   lint:
@@ -54,13 +54,13 @@ jobs:
           fi
 
       - name: actionlint
-        run: |
-          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          ./actionlint
+        uses: rhysd/actionlint@53de0de46509825750e0d5d684ad266adf44bdf9 # main
+        with:
+          filenames: '""'
 
       - name: gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0
           gosec ./...
 
   integration-test:
