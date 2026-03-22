@@ -24,6 +24,7 @@
             protoc-gen-go-grpc
 
             # Dev tools
+            gh
             gopls
             golangci-lint
           ];

@@ -21,10 +21,10 @@ type FieldConstraints struct {
 	Hostname         bool
 	IPv4             bool
 	IPv6             bool
-	Gt               string // numeric: greater than
-	Gte              string // numeric: greater than or equal
-	Lt               string // numeric: less than
-	Lte              string // numeric: less than or equal
+	Gt               string  // numeric: greater than
+	Gte              string  // numeric: greater than or equal
+	Lt               string  // numeric: less than
+	Lte              string  // numeric: less than or equal
 	MinItems         *uint64 // repeated: min items
 	MaxItems         *uint64 // repeated: max items
 	Const            string  // exact value constraint
