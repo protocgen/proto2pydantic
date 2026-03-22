@@ -1,0 +1,9 @@
+# Build artifacts
+protoc-gen-proto2pydantic
+testdata/output/
+
+# Go
+/vendor/
+
+# Nix
+result

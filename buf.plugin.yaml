@@ -1,0 +1,3 @@
+version: v1
+name: buf.build/protocgen/proto2pydantic
+plugin_version: v0.1.0

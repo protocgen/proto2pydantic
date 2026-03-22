@@ -1,0 +1,7 @@
+# GitHub community health files
+
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/protocgen/proto2pydantic/discussions
+    about: Ask questions and share ideas

@@ -1,0 +1,100 @@
+// Test proto exercising every feature of proto2pydantic.
+syntax = "proto3";
+
+package test.v1;
+
+option go_package = "github.com/protocgen/proto2pydantic/testdata/testpb";
+
+import "google/api/field_behavior.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "buf/validate/validate.proto";
+
+// Status of a task.
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_PENDING = 1;
+  TASK_STATUS_RUNNING = 2;
+  TASK_STATUS_COMPLETED = 3;
+  TASK_STATUS_FAILED = 4;
+}
+
+// Address is a nested message type.
+message Address {
+  string street = 1 [(google.api.field_behavior) = REQUIRED];
+  string city = 2 [(google.api.field_behavior) = REQUIRED];
+  string state = 3;
+  string zip_code = 4 [(buf.validate.field).string = {pattern: "^[0-9]{5}(-[0-9]{4})?$"}];
+  string country = 5 [(buf.validate.field).string = {min_len: 2, max_len: 2}];
+}
+
+// User exercises field_behavior, buf/validate, nested messages, maps,
+// repeated fields, oneofs, well-known types, and OUTPUT_ONLY.
+message User {
+  // Server-assigned unique identifier.
+  string id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // The user's email address.
+  string email = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).string.email = true
+  ];
+
+  // Display name.
+  string display_name = 3 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).string = {min_len: 1, max_len: 200}
+  ];
+
+  // Age of the user.
+  int32 age = 4 [(buf.validate.field).int32 = {gte: 0, lte: 150}];
+
+  // Score with floating-point constraints.
+  double score = 5 [(buf.validate.field).double = {gte: 0.0, lte: 100.0}];
+
+  // Tags with repeated constraints.
+  repeated string tags = 6 [(buf.validate.field).repeated = {min_items: 1, max_items: 20}];
+
+  // Home address (nested message).
+  Address home_address = 7;
+
+  // Multiple addresses (repeated message).
+  repeated Address other_addresses = 8;
+
+  // Metadata as a map.
+  map<string, string> metadata = 9;
+
+  // Arbitrary structured data.
+  google.protobuf.Struct extra_data = 10;
+
+  // When the user was created.
+  google.protobuf.Timestamp created_at = 11 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Current status.
+  TaskStatus status = 12;
+
+  // Profile URL with URI validation.
+  string profile_url = 13 [(buf.validate.field).string.uri = true];
+
+  // Optional nickname (proto3 optional keyword).
+  optional string nickname = 14;
+
+  // Username required via buf/validate.
+  string username = 17 [(buf.validate.field).required = true];
+
+  // A oneof for the preferred contact method.
+  oneof contact {
+    string phone = 15;
+    string slack_handle = 16;
+  }
+}
+
+// CreateUserRequest is a typical RPC request message.
+message CreateUserRequest {
+  User user = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// CreateUserResponse is a typical RPC response message.
+message CreateUserResponse {
+  User user = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
