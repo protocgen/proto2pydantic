@@ -1,7 +1,6 @@
 # proto2pydantic
 
 [![CI](https://github.com/protocgen/proto2pydantic/actions/workflows/ci.yml/badge.svg)](https://github.com/protocgen/proto2pydantic/actions/workflows/ci.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/protocgen/proto2pydantic/badge)](https://scorecard.dev/viewer/?uri=github.com/protocgen/proto2pydantic)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/protocgen/proto2pydantic)](https://goreportcard.com/report/github.com/protocgen/proto2pydantic)
 
@@ -213,7 +212,6 @@ Additional security measures:
 | **CodeQL** | Semantic code analysis on every PR + weekly scan |
 | **govulncheck** | Go vulnerability database checks in CI |
 | **gosec** | Go security linter in CI |
-| **OpenSSF Scorecard** | Weekly supply-chain assessment ([view results](https://scorecard.dev/viewer/?uri=github.com/protocgen/proto2pydantic)) |
 | **Signed commits** | Required on `main` via repository ruleset |
 | **Immutable tags** | Release tags cannot be deleted or force-pushed |
 | **Dependabot** | Automated dependency updates (Go modules + GitHub Actions) |
