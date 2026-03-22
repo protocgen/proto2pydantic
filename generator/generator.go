@@ -215,6 +215,11 @@ func processField(field *protogen.Field, pyFile *PydanticFile) PydanticField {
 		Constraints: extractConstraints(field),
 	}
 
+	// buf.validate required also makes the field required
+	if pyField.Constraints != nil && pyField.Constraints.ValidateRequired {
+		pyField.Required = true
+	}
+
 	// Determine the Python type
 	pyField.PythonType = pythonType(field, pyFile)
 

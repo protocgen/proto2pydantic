@@ -77,3 +77,29 @@ jobs:
 
       - name: Validate Python syntax
         run: python3 -c "import ast; ast.parse(open('testdata/output/types.py').read())"
+
+  golden-test:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
+
+      - name: Build plugin
+        run: go build -o protoc-gen-proto2pydantic .
+
+      - name: Regenerate golden file
+        run: |
+          mkdir -p testdata/golden_actual
+          cd testdata/proto
+          PATH="$(git rev-parse --show-toplevel):$PATH" buf generate --output ../golden_actual
+
+      - name: Compare golden file
+        run: diff -u testdata/golden/test_pb2_pydantic.py testdata/golden_actual/test_pb2_pydantic.py

@@ -12,22 +12,23 @@ import (
 
 // FieldConstraints holds extracted buf/validate constraints for a Pydantic Field().
 type FieldConstraints struct {
-	MinLength *uint64
-	MaxLength *uint64
-	Pattern   string
-	Email     bool
-	UUID      bool
-	URI       bool
-	Hostname  bool
-	IPv4      bool
-	IPv6      bool
-	Gt        string // numeric: greater than
-	Gte       string // numeric: greater than or equal
-	Lt        string // numeric: less than
-	Lte       string // numeric: less than or equal
-	MinItems  *uint64 // repeated: min items
-	MaxItems  *uint64 // repeated: max items
-	Const     string  // exact value constraint
+	MinLength        *uint64
+	MaxLength        *uint64
+	Pattern          string
+	Email            bool
+	UUID             bool
+	URI              bool
+	Hostname         bool
+	IPv4             bool
+	IPv6             bool
+	Gt               string // numeric: greater than
+	Gte              string // numeric: greater than or equal
+	Lt               string // numeric: less than
+	Lte              string // numeric: less than or equal
+	MinItems         *uint64 // repeated: min items
+	MaxItems         *uint64 // repeated: max items
+	Const            string  // exact value constraint
+	ValidateRequired bool    // (buf.validate.field).required = true
 }
 
 // HasConstraints returns true if any constraint is set.
@@ -35,7 +36,8 @@ func (c *FieldConstraints) HasConstraints() bool {
 	return c.MinLength != nil || c.MaxLength != nil ||
 		c.Pattern != "" || c.Email || c.UUID || c.URI || c.Hostname || c.IPv4 || c.IPv6 ||
 		c.Gt != "" || c.Gte != "" || c.Lt != "" || c.Lte != "" ||
-		c.MinItems != nil || c.MaxItems != nil || c.Const != ""
+		c.MinItems != nil || c.MaxItems != nil || c.Const != "" ||
+		c.ValidateRequired
 }
 
 // ToPydanticArgs returns the constraint arguments for a Pydantic Field() call.
@@ -95,6 +97,11 @@ func extractConstraints(field *protogen.Field) *FieldConstraints {
 	}
 
 	c := &FieldConstraints{}
+
+	// Top-level required constraint
+	if rules.GetRequired() {
+		c.ValidateRequired = true
+	}
 
 	// String constraints
 	if sr := rules.GetString_(); sr != nil {

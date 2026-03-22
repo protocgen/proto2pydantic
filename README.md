@@ -132,6 +132,7 @@ class CreateUserRequest(BaseModel):
 
 | `buf/validate` rule | Pydantic `Field()` |
 |---|---|
+| `required` | `Field(...)` — no default, field is required |
 | `string.min_len` | `min_length=` |
 | `string.max_len` | `max_length=` |
 | `string.pattern` | `pattern=` |
