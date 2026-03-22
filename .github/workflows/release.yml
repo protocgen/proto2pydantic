@@ -7,10 +7,13 @@ on:
 
 permissions:
   contents: write
+  id-token: write  # needed for SLSA provenance
 
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -21,12 +24,33 @@ jobs:
           go-version-file: go.mod
 
       - name: Run GoReleaser
+        id: goreleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate subject hashes
+        id: hash
+        env:
+          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
+        run: |
+          set -euo pipefail
+          hashes=$(cat <(echo -E "$ARTIFACTS") | jq -r '.[] | select(.type == "Archive" or .type == "Checksum") | .path' | xargs sha256sum | base64 -w0)
+          echo "hashes=$hashes" >> "$GITHUB_OUTPUT"
+
+  provenance:
+    needs: goreleaser
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.goreleaser.outputs.hashes }}
+      upload-assets: true
 
   buf-plugin:
     runs-on: ubuntu-latest
