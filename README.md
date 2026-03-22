@@ -39,6 +39,8 @@ This means projects like [A2A](https://github.com/a2aproject/A2A) that use `fiel
 - 📦 **Well-known types** — `Struct` → `dict[str, Any]`, `Timestamp` → `datetime`
 - 🔌 **buf native** — works as a local or remote buf plugin
 - ⚙️ **Configurable** — custom base class, camelCase aliases, output filename
+- 🔄 **Topological sort** — models ordered so dependencies are defined before use
+- 📋 **`__all__` exports** — generated files include a clean public API list
 
 ## Install
 
@@ -165,6 +167,7 @@ class CreateUserRequest(BaseModel):
 | `alias_generator` | Add `model_config` with alias generator | `camel` |
 | `output_file` | Override output filename | `types.py` |
 | `strip_proto_suffix` | Use `foo.py` instead of `foo_pb2_pydantic.py` | `true` |
+| `description` | Override module-level docstring | `A2A type definitions` |
 
 ## Type Mapping
 

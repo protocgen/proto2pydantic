@@ -34,6 +34,7 @@ func main() {
 	flags.StringVar(&opts.AliasGenerator, "alias_generator", "", "Alias generator for model_config ('camel' for camelCase)")
 	flags.StringVar(&opts.OutputFile, "output_file", "", "Override output filename (e.g. 'types.py')")
 	flags.BoolVar(&opts.StripProtoSuffix, "strip_proto_suffix", false, "Strip '_pb2_pydantic' from output filename")
+	flags.StringVar(&opts.Description, "description", "", "Override module-level docstring")
 
 	protogen.Options{
 		ParamFunc: flags.Set,
