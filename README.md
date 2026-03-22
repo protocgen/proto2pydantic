@@ -1,5 +1,10 @@
 # proto2pydantic
 
+[![CI](https://github.com/protocgen/proto2pydantic/actions/workflows/ci.yml/badge.svg)](https://github.com/protocgen/proto2pydantic/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/protocgen/proto2pydantic/badge)](https://scorecard.dev/viewer/?uri=github.com/protocgen/proto2pydantic)
+[![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
+[![Go Report Card](https://goreportcard.com/badge/github.com/protocgen/proto2pydantic)](https://goreportcard.com/report/github.com/protocgen/proto2pydantic)
+
 A `protoc` plugin that generates [Pydantic v2](https://docs.pydantic.dev/) `BaseModel` classes from Protocol Buffer definitions — with **`google.api.field_behavior`** support.
 
 ## Why this exists
@@ -183,7 +188,32 @@ class CreateUserRequest(BaseModel):
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, PR process, and commit signing requirements.
 
-## Security
+## Security & Supply Chain
+
+All release binaries include [SLSA Level 3](https://slsa.dev) provenance. Verify a downloaded binary:
+
+```bash
+# Install the verifier
+go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest
+
+# Verify
+slsa-verifier verify-artifact proto2pydantic_0.2.0_linux_amd64.tar.gz \
+  --provenance-path multiple.intoto.jsonl \
+  --source-uri github.com/protocgen/proto2pydantic
+```
+
+Additional security measures:
+
+| Measure | Details |
+|---|---|
+| **SLSA L3 provenance** | Signed build attestations for every release |
+| **CodeQL** | Semantic code analysis on every PR + weekly scan |
+| **govulncheck** | Go vulnerability database checks in CI |
+| **gosec** | Go security linter in CI |
+| **OpenSSF Scorecard** | Weekly supply-chain assessment ([view results](https://scorecard.dev/viewer/?uri=github.com/protocgen/proto2pydantic)) |
+| **Signed commits** | Required on `main` via repository ruleset |
+| **Immutable tags** | Release tags cannot be deleted or force-pushed |
+| **Dependabot** | Automated dependency updates (Go modules + GitHub Actions) |
 
 See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
 
