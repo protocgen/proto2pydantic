@@ -97,9 +97,12 @@ jobs:
 
       - name: Regenerate golden file
         run: |
-          mkdir -p testdata/golden_actual
           cd testdata/proto
-          PATH="$(git rev-parse --show-toplevel):$PATH" buf generate --output ../golden_actual
+          PATH="$(git rev-parse --show-toplevel):$PATH" buf generate
 
       - name: Compare golden file
-        run: diff -u testdata/golden/test_pb2_pydantic.py testdata/golden_actual/test_pb2_pydantic.py
+        run: |
+          if ! git diff --exit-code testdata/golden/; then
+            echo "::error::Golden file mismatch! Regenerate with: cd testdata/proto && buf generate"
+            exit 1
+          fi

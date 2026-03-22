@@ -27,6 +27,7 @@
             gh
             gopls
             golangci-lint
+            pre-commit
           ];
 
           shellHook = ''
@@ -34,14 +35,8 @@
             echo "  go:       $(go version)"
             echo "  buf:      $(buf --version)"
             echo "  protoc:   $(protoc --version)"
+            pre-commit install --quiet
           '';
-        };
-
-        packages.default = pkgs.buildGoModule {
-          pname = "protoc-gen-proto2pydantic";
-          version = "0.1.0";
-          src = ./.;
-          vendorHash = null; # update after first build
         };
       });
 }
