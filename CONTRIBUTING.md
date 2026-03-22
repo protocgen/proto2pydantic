@@ -46,6 +46,23 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 - `ci:` CI/CD changes
 - `deps:` dependency updates
 
+## Signed Commits
+
+All commits to `main` must be signed. Set up Git commit signing:
+
+```bash
+# SSH signing (recommended)
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+
+# Or GPG signing
+git config --global commit.gpgsign true
+git config --global user.signingkey YOUR_GPG_KEY_ID
+```
+
+Make sure the signing key is added to your [GitHub account SSH keys](https://github.com/settings/keys) (type: "Signing Key").
+
 ## Code of Conduct
 
 Be respectful and constructive. We follow the [Contributor Covenant](https://www.contributor-covenant.org/).

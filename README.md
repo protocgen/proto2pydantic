@@ -179,6 +179,14 @@ class CreateUserRequest(BaseModel):
 | `google.protobuf.Value` | `Any` |
 | Enum | `str` Enum (prefix-stripped, lowercase) |
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, PR process, and commit signing requirements.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+
 ## License
 
 Apache-2.0
