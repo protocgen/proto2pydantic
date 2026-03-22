@@ -54,7 +54,7 @@ jobs:
           fi
 
       - name: actionlint
-        uses: rhysd/actionlint@53de0de46509825750e0d5d684ad266adf44bdf9 # main
+        uses: rhysd/actionlint@8533d7868c9f51ba0375afa3c565a72622cc675d # main
         with:
           filenames: '""'
 
