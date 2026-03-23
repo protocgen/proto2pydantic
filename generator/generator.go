@@ -462,9 +462,10 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 		g.P("from pydantic import BaseModel, Field")
 	}
 
-	// Import ConfigDict if alias_generator is used
+	// Import ConfigDict and to_camel if alias_generator is used
 	if opts.AliasGenerator != "" {
 		g.P("from pydantic import ConfigDict")
+		g.P("from pydantic.alias_generators import to_camel")
 	}
 
 	g.P()
@@ -590,7 +591,7 @@ func writeModel(g *protogen.GeneratedFile, model PydanticModel, opts *Options) {
 	if opts.AliasGenerator == "camel" {
 		g.P("    model_config = ConfigDict(")
 		g.P("        populate_by_name=True,")
-		g.P("        alias_generator=lambda s: s[0].lower() + s[1:].replace('_', '') if '_' in s else s,")
+		g.P("        alias_generator=to_camel,")
 		g.P("    )")
 		g.P()
 		hasContent = true
