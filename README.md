@@ -94,6 +94,11 @@ message AgentInterface {
 Generates:
 ```python
 class AgentInterface(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=to_camel,
+    )
+
     url: str = Field(..., description='The URL where this interface is available.')
     protocol_binding: str = Field(..., description='The protocol binding supported at this URL.')
     tenant: str = Field(default='', description='Tenant ID.')
@@ -163,7 +168,7 @@ class CreateUserRequest(BaseModel):
 | Option | Description | Example |
 |---|---|---|
 | `base_class` | Custom base class for models | `a2a._base.A2ABaseModel` |
-| `alias_generator` | Add `model_config` with alias generator | `camel` |
+| `alias_generator` | Add `model_config` with Pydantic's [`to_camel`](https://docs.pydantic.dev/latest/api/alias_generators/#pydantic.alias_generators.to_camel) for ProtoJSON-compatible lowerCamelCase aliases (`populate_by_name=True` allows both snake_case and camelCase input) | `camel` |
 | `output_file` | Override output filename | `types.py` |
 | `strip_proto_suffix` | Use `foo.py` instead of `foo_pb2_pydantic.py` | `true` |
 | `description` | Override module-level docstring | `A2A type definitions` |
