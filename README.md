@@ -40,6 +40,7 @@ This means projects like [A2A](https://github.com/a2aproject/A2A) that use `fiel
 - ⚙️ **Configurable** — custom base class, camelCase aliases, output filename
 - 🔄 **Topological sort** — models ordered so dependencies are defined before use
 - 📋 **`__all__` exports** — generated files include a clean public API list
+- 🅰️ **A2A / ProtoJSON preset** — `preset=a2a` for full ProtoJSON compatibility (camelCase, raw enums, `to_proto_json()`, RFC 3339 timestamps, base64 bytes)
 
 ## Install
 
@@ -58,8 +59,8 @@ plugins:
   - local: protoc-gen-proto2pydantic
     out: src/types
     opt:
+      - preset=a2a
       - base_class=a2a._base.A2ABaseModel
-      - alias_generator=camel
       - output_file=types.py
 ```
 
@@ -167,8 +168,10 @@ class CreateUserRequest(BaseModel):
 
 | Option | Description | Example |
 |---|---|---|
+| `preset` | Preset configuration. `a2a` auto-sets `alias_generator=camel` + `enum_style=raw` for ProtoJSON | `a2a` |
 | `base_class` | Custom base class for models | `a2a._base.A2ABaseModel` |
 | `alias_generator` | Add `model_config` with Pydantic's [`to_camel`](https://docs.pydantic.dev/latest/api/alias_generators/#pydantic.alias_generators.to_camel) for ProtoJSON-compatible lowerCamelCase aliases (`populate_by_name=True` allows both snake_case and camelCase input) | `camel` |
+| `enum_style` | Enum generation style. `raw` preserves original proto names (e.g., `TASK_STATE_COMPLETED`) and includes `UNSPECIFIED` values for ProtoJSON compatibility. Default strips prefix and lowercases | `raw` |
 | `output_file` | Override output filename | `types.py` |
 | `strip_proto_suffix` | Use `foo.py` instead of `foo_pb2_pydantic.py` | `true` |
 | `description` | Override module-level docstring | `A2A type definitions` |
@@ -181,15 +184,61 @@ class CreateUserRequest(BaseModel):
 | `int32`, `int64`, etc. | `int` |
 | `float`, `double` | `float` |
 | `bool` | `bool` |
-| `bytes` | `bytes` |
+| `bytes` | `bytes` (with base64 `@field_serializer` for ProtoJSON) |
 | `repeated T` | `list[T]` |
 | `map<K, V>` | `dict[K, V]` |
 | `optional T` | `T \| None` |
 | `oneof` | `T1 \| T2 \| ... \| None` |
 | `google.protobuf.Struct` | `dict[str, Any]` |
-| `google.protobuf.Timestamp` | `datetime` |
+| `google.protobuf.Timestamp` | `datetime` (with RFC 3339 `@field_serializer` for ProtoJSON) |
 | `google.protobuf.Value` | `Any` |
-| Enum | `str` Enum (prefix-stripped, lowercase) |
+| Enum (default) | `str` Enum (prefix-stripped, lowercase) |
+| Enum (`enum_style=raw`) | `str` Enum (original proto names, e.g., `TASK_STATE_COMPLETED`) |
+
+## ProtoJSON / A2A Support
+
+For projects following the [ProtoJSON specification](https://protobuf.dev/programming-guides/json/) (like [A2A](https://github.com/a2aproject/A2A) per [ADR-001](https://github.com/a2aproject/A2A/blob/main/adrs/adr-001-protojson-serialization.md)), use the `preset=a2a` option:
+
+```yaml
+# buf.gen.yaml
+plugins:
+  - local: protoc-gen-proto2pydantic
+    out: src/types
+    opt:
+      - preset=a2a
+```
+
+This enables:
+
+| ProtoJSON Requirement | What `preset=a2a` does |
+|---|---|
+| camelCase field names | `alias_generator=to_camel` + `populate_by_name=True` |
+| SCREAMING_SNAKE_CASE enums | `enum_style=raw` preserves original proto names |
+| UNSPECIFIED enum values | Included (not skipped) |
+| Null omission | `to_proto_json()` method on every model |
+| Timestamp → RFC 3339 | `@field_serializer` emitting `"2025-01-01T10:00:00.000Z"` |
+| bytes → base64 | `@field_serializer` emitting base64-encoded strings |
+
+### Round-trip example
+
+```python
+from generated_types import Task, TaskState
+
+# Deserialize ProtoJSON → Pydantic (camelCase keys accepted)
+task = Task.model_validate({
+    "id": "task-123",
+    "contextId": "ctx-456",
+    "status": {"state": "TASK_STATE_WORKING"}
+})
+
+# Pythonic access
+assert task.context_id == "ctx-456"
+assert task.status.state == TaskState.TASK_STATE_WORKING
+
+# Serialize back to ProtoJSON (camelCase keys, no None values)
+proto_json = task.to_proto_json()
+# {"id": "task-123", "contextId": "ctx-456", "status": {"state": "TASK_STATE_WORKING"}}
+```
 
 ## Contributing
 
