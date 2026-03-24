@@ -61,12 +61,12 @@ type PydanticEnumValue struct {
 
 // PydanticModel represents a Pydantic BaseModel class.
 type PydanticModel struct {
-	Name               string
-	Description        string
-	Fields             []PydanticField
-	OneOfs             []PydanticOneOf
-	TimestampFields    []string // field names that are datetime (need RFC 3339 serializer)
-	BytesFields        []string // field names that are bytes (need base64 serializer)
+	Name            string
+	Description     string
+	Fields          []PydanticField
+	OneOfs          []PydanticOneOf
+	TimestampFields []string // field names that are datetime (need RFC 3339 serializer)
+	BytesFields     []string // field names that are bytes (need base64 serializer)
 }
 
 // PydanticOneOf represents a oneof group rendered as a union type.
@@ -681,7 +681,7 @@ func writeModel(g *protogen.GeneratedFile, model PydanticModel, opts *Options) {
 			g.P()
 		}
 		g.P("    def to_proto_json(self) -> dict:")
-		g.P(`        """Serialize to a ProtoJSON-compatible dict (camelCase keys, no None values)."""`) 
+		g.P(`        """Serialize to a ProtoJSON-compatible dict (camelCase keys, no None values)."""`)
 		g.P("        return self.model_dump(by_alias=True, exclude_none=True)")
 		g.P()
 		hasContent = true
