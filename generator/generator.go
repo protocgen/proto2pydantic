@@ -485,17 +485,15 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 
 	// Import the base class and field_serializer if needed
 	needsFieldSerializer := false
+	needsBase64 := false
 	for _, model := range pyFile.Models {
 		if len(model.TimestampFields) > 0 || len(model.BytesFields) > 0 {
 			needsFieldSerializer = true
-			break
 		}
-	}
-
-	needsBase64 := false
-	for _, model := range pyFile.Models {
 		if len(model.BytesFields) > 0 {
 			needsBase64 = true
+		}
+		if needsFieldSerializer && needsBase64 {
 			break
 		}
 	}
