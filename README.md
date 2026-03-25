@@ -37,7 +37,7 @@ This means projects like [A2A](https://github.com/a2aproject/A2A) that use `fiel
 - 🐍 **Idiomatic Python** — snake_case fields, `str` Enums, `oneof` → union types
 - 📦 **Well-known types** — `Struct` → `dict[str, Any]`, `Timestamp` → `datetime`
 - 🔌 **buf native** — works as a local or remote buf plugin
-- ⚙️ **Configurable** — custom base class, camelCase aliases, output filename
+- ⚙️ **Configurable** — custom base class, camelCase aliases, output filename (see [CONFIG.md](CONFIG.md) for full reference)
 - 🔄 **Topological sort** — models ordered so dependencies are defined before use
 - 📋 **`__all__` exports** — generated files include a clean public API list
 - 🅰️ **A2A / ProtoJSON preset** — `preset=a2a` for full ProtoJSON compatibility (camelCase, raw enums, `to_proto_json()`, RFC 3339 timestamps, base64 bytes)
