@@ -8,19 +8,27 @@ from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_serializer
+from pydantic import ConfigDict
+from pydantic.alias_generators import to_camel
 
 
 class TaskStatus(str, Enum):
     """Status of a task."""
 
-    pending = 'pending'
-    running = 'running'
-    completed = 'completed'
-    failed = 'failed'
+    TASK_STATUS_UNSPECIFIED = 'TASK_STATUS_UNSPECIFIED'
+    TASK_STATUS_PENDING = 'TASK_STATUS_PENDING'
+    TASK_STATUS_RUNNING = 'TASK_STATUS_RUNNING'
+    TASK_STATUS_COMPLETED = 'TASK_STATUS_COMPLETED'
+    TASK_STATUS_FAILED = 'TASK_STATUS_FAILED'
 
 
 class Address(BaseModel):
     """Address is a nested message type."""
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=to_camel,
+    )
 
     street: str = Field(...)
     city: str = Field(...)
@@ -28,9 +36,19 @@ class Address(BaseModel):
     zip_code: str = Field(default='', pattern='^[0-9]{5}(-[0-9]{4})?$')
     country: str = Field(default='', min_length=2, max_length=2)
 
+    def to_proto_json(self) -> dict:
+        """Serialize to a ProtoJSON-compatible dict (camelCase keys, no None values)."""
+        return self.model_dump(by_alias=True, exclude_none=True)
+
+
 
 class User(BaseModel):
     """User exercises field_behavior, buf/validate, nested messages, maps, repeated fields, oneofs, well-known types, and OUTPUT_ONLY."""
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=to_camel,
+    )
 
     id: str = Field(default='', exclude=True, description='Server-assigned unique identifier.')
     email: str = Field(..., description='The user\'s email address.')
@@ -49,6 +67,11 @@ class User(BaseModel):
     username: str = Field(..., description='Username required via buf/validate.')
     contact: str | str | None = None
 
+
+    def to_proto_json(self) -> dict:
+        """Serialize to a ProtoJSON-compatible dict (camelCase keys, no None values)."""
+        return self.model_dump(by_alias=True, exclude_none=True)
+
     @field_serializer('created_at')
     @classmethod
     def _serialize_timestamp(cls, v: datetime | None, _info: Any) -> str | None:
@@ -62,13 +85,33 @@ class User(BaseModel):
 class CreateUserRequest(BaseModel):
     """CreateUserRequest is a typical RPC request message."""
 
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=to_camel,
+    )
+
     user: User = Field(...)
+
+    def to_proto_json(self) -> dict:
+        """Serialize to a ProtoJSON-compatible dict (camelCase keys, no None values)."""
+        return self.model_dump(by_alias=True, exclude_none=True)
+
 
 
 class CreateUserResponse(BaseModel):
     """CreateUserResponse is a typical RPC response message."""
 
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=to_camel,
+    )
+
     user: User = Field(default=None, exclude=True)
+
+    def to_proto_json(self) -> dict:
+        """Serialize to a ProtoJSON-compatible dict (camelCase keys, no None values)."""
+        return self.model_dump(by_alias=True, exclude_none=True)
+
 
 
 

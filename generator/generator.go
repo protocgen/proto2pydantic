@@ -21,6 +21,20 @@ type Options struct {
 	OutputFile       string // override output filename
 	StripProtoSuffix bool   // strip _pb2_pydantic from filename
 	Description      string // override module-level docstring
+	EnumStyle        string // enum style: "" (default pythonic) or "raw" (proto names)
+	Preset           string // preset: "a2a" sets alias_generator=camel + enum_style=raw
+}
+
+// applyPreset sets default options based on the chosen preset.
+func (o *Options) applyPreset() {
+	if o.Preset == "a2a" {
+		if o.AliasGenerator == "" {
+			o.AliasGenerator = "camel"
+		}
+		if o.EnumStyle == "" {
+			o.EnumStyle = "raw"
+		}
+	}
 }
 
 // PydanticFile represents the full generated Python file.
@@ -47,10 +61,12 @@ type PydanticEnumValue struct {
 
 // PydanticModel represents a Pydantic BaseModel class.
 type PydanticModel struct {
-	Name        string
-	Description string
-	Fields      []PydanticField
-	OneOfs      []PydanticOneOf
+	Name            string
+	Description     string
+	Fields          []PydanticField
+	OneOfs          []PydanticOneOf
+	TimestampFields []string // field names that are datetime (need RFC 3339 serializer)
+	BytesFields     []string // field names that are bytes (need base64 serializer)
 }
 
 // PydanticOneOf represents a oneof group rendered as a union type.
@@ -77,6 +93,9 @@ type PydanticField struct {
 
 // GenerateFile generates a Python file with Pydantic models for the given proto file.
 func GenerateFile(gen *protogen.Plugin, file *protogen.File, opts *Options) error {
+	// Apply preset defaults before processing
+	opts.applyPreset()
+
 	pyFile := &PydanticFile{
 		SourceProto: file.Desc.Path(),
 		Imports:     make(map[string]bool),
@@ -85,7 +104,7 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File, opts *Options) erro
 
 	// Process enums
 	for _, enum := range file.Enums {
-		pyEnum := processEnum(enum)
+		pyEnum := processEnum(enum, opts)
 		pyFile.Enums = append(pyFile.Enums, pyEnum)
 	}
 
@@ -96,7 +115,7 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File, opts *Options) erro
 
 		// Also process nested enums and messages
 		for _, nestedEnum := range msg.Enums {
-			pyFile.Enums = append(pyFile.Enums, processEnum(nestedEnum))
+			pyFile.Enums = append(pyFile.Enums, processEnum(nestedEnum, opts))
 		}
 	}
 
@@ -125,30 +144,35 @@ func outputFilename(protoPath string, opts *Options) string {
 }
 
 // processEnum converts a protobuf enum descriptor to a PydanticEnum.
-func processEnum(enum *protogen.Enum) PydanticEnum {
+func processEnum(enum *protogen.Enum, opts *Options) PydanticEnum {
 	pyEnum := PydanticEnum{
 		Name:        string(enum.Desc.Name()),
 		Description: cleanComment(enum.Comments.Leading.String()),
 	}
 
-	prefix := enumPrefix(string(enum.Desc.Name()))
-
 	for _, val := range enum.Values {
 		name := string(val.Desc.Name())
 
-		// Skip UNSPECIFIED values
-		if strings.HasSuffix(name, "_UNSPECIFIED") {
-			continue
+		if opts.EnumStyle == "raw" {
+			// Raw style: preserve original proto names including UNSPECIFIED
+			pyEnum.Values = append(pyEnum.Values, PydanticEnumValue{
+				Name:  name,
+				Value: name,
+			})
+		} else {
+			// Default style: strip prefix, lowercase, skip UNSPECIFIED
+			if strings.HasSuffix(name, "_UNSPECIFIED") {
+				continue
+			}
+			prefix := enumPrefix(string(enum.Desc.Name()))
+			pythonName := strings.TrimPrefix(name, prefix)
+			pythonName = strings.ToLower(pythonName)
+
+			pyEnum.Values = append(pyEnum.Values, PydanticEnumValue{
+				Name:  pythonName,
+				Value: pythonName,
+			})
 		}
-
-		// Strip the enum prefix (e.g., TASK_STATE_COMPLETED -> completed)
-		pythonName := strings.TrimPrefix(name, prefix)
-		pythonName = strings.ToLower(pythonName)
-
-		pyEnum.Values = append(pyEnum.Values, PydanticEnumValue{
-			Name:  pythonName,
-			Value: pythonName,
-		})
 	}
 
 	return pyEnum
@@ -176,6 +200,17 @@ func processMessage(msg *protogen.Message, pyFile *PydanticFile) PydanticModel {
 		}
 
 		pyModel.Fields = append(pyModel.Fields, pyField)
+
+		// Track fields that need ProtoJSON serializers
+		if field.Desc.Kind() == protoreflect.MessageKind && field.Desc.Message() != nil {
+			fullName := string(field.Desc.Message().FullName())
+			if fullName == "google.protobuf.Timestamp" {
+				pyModel.TimestampFields = append(pyModel.TimestampFields, pyField.Name)
+			}
+		}
+		if field.Desc.Kind() == protoreflect.BytesKind {
+			pyModel.BytesFields = append(pyModel.BytesFields, pyField.Name)
+		}
 	}
 
 	// Process oneof groups into union types
@@ -448,7 +483,25 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 		g.P()
 	}
 
-	// Import the base class
+	// Import the base class and field_serializer if needed
+	needsFieldSerializer := false
+	needsBase64 := false
+	for _, model := range pyFile.Models {
+		if len(model.TimestampFields) > 0 || len(model.BytesFields) > 0 {
+			needsFieldSerializer = true
+		}
+		if len(model.BytesFields) > 0 {
+			needsBase64 = true
+		}
+		if needsFieldSerializer && needsBase64 {
+			break
+		}
+	}
+
+	if needsBase64 {
+		g.P("import base64")
+	}
+
 	baseClass := "BaseModel"
 	if opts.BaseClass != "" && opts.BaseClass != "BaseModel" {
 		// Custom base class: import from its module
@@ -457,9 +510,17 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 		baseClass = parts[len(parts)-1]
 		modulePath := strings.Join(parts[:len(parts)-1], ".")
 		g.P("from ", modulePath, " import ", baseClass)
-		g.P("from pydantic import Field")
+		if needsFieldSerializer {
+			g.P("from pydantic import Field, field_serializer")
+		} else {
+			g.P("from pydantic import Field")
+		}
 	} else {
-		g.P("from pydantic import BaseModel, Field")
+		if needsFieldSerializer {
+			g.P("from pydantic import BaseModel, Field, field_serializer")
+		} else {
+			g.P("from pydantic import BaseModel, Field")
+		}
 	}
 
 	// Import alias generator dependencies
@@ -608,6 +669,46 @@ func writeModel(g *protogen.GeneratedFile, model PydanticModel, opts *Options) {
 	// Write oneof fields as union types
 	for _, oneOf := range model.OneOfs {
 		g.P("    ", oneOf.FieldName, ": ", oneOf.PythonType, " = None")
+		g.P()
+		hasContent = true
+	}
+
+	// Write to_proto_json() convenience method when alias_generator is set
+	if opts.AliasGenerator == "camel" {
+		if hasContent {
+			g.P()
+		}
+		g.P("    def to_proto_json(self) -> dict:")
+		g.P(`        """Serialize to a ProtoJSON-compatible dict (camelCase keys, no None values)."""`)
+		g.P("        return self.model_dump(by_alias=True, exclude_none=True)")
+		g.P()
+		hasContent = true
+	}
+
+	// Write @field_serializer for Timestamp fields (datetime -> RFC 3339)
+	if len(model.TimestampFields) > 0 {
+		fieldList := "'" + strings.Join(model.TimestampFields, "', '") + "'"
+		g.P("    @field_serializer(", fieldList, ")")
+		g.P("    @classmethod")
+		g.P("    def _serialize_timestamp(cls, v: datetime | None, _info: Any) -> str | None:")
+		g.P(`        """Serialize datetime to RFC 3339 with UTC 'Z' suffix for ProtoJSON."""`)
+		g.P("        if v is None:")
+		g.P("            return None")
+		g.P("        return v.strftime('%Y-%m-%dT%H:%M:%S.') + f'{v.microsecond:06d}'[:3] + 'Z'")
+		g.P()
+		hasContent = true
+	}
+
+	// Write @field_serializer for bytes fields (bytes -> base64)
+	if len(model.BytesFields) > 0 {
+		fieldList := "'" + strings.Join(model.BytesFields, "', '") + "'"
+		g.P("    @field_serializer(", fieldList, ")")
+		g.P("    @classmethod")
+		g.P("    def _serialize_bytes(cls, v: bytes | None, _info: Any) -> str | None:")
+		g.P(`        """Serialize bytes to base64 string for ProtoJSON."""`)
+		g.P("        if v is None:")
+		g.P("            return None")
+		g.P("        return base64.b64encode(v).decode('ascii')")
 		g.P()
 		hasContent = true
 	}

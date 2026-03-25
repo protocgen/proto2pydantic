@@ -35,6 +35,8 @@ func main() {
 	flags.StringVar(&opts.OutputFile, "output_file", "", "Override output filename (e.g. 'types.py')")
 	flags.BoolVar(&opts.StripProtoSuffix, "strip_proto_suffix", false, "Strip '_pb2_pydantic' from output filename")
 	flags.StringVar(&opts.Description, "description", "", "Override module-level docstring")
+	flags.StringVar(&opts.EnumStyle, "enum_style", "", "Enum style: 'raw' preserves proto names for ProtoJSON compatibility")
+	flags.StringVar(&opts.Preset, "preset", "", "Preset: 'a2a' sets alias_generator=camel + enum_style=raw for ProtoJSON")
 
 	protogen.Options{
 		ParamFunc: flags.Set,

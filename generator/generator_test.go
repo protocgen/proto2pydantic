@@ -275,3 +275,43 @@ func TestTopologicalSort(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyPreset(t *testing.T) {
+	tests := []struct {
+		name              string
+		opts              Options
+		expectedAlias     string
+		expectedEnumStyle string
+	}{
+		{
+			"a2a preset sets defaults",
+			Options{Preset: "a2a"},
+			"camel",
+			"raw",
+		},
+		{
+			"a2a preset does not override explicit values",
+			Options{Preset: "a2a", AliasGenerator: "custom", EnumStyle: "default"},
+			"custom",
+			"default",
+		},
+		{
+			"no preset leaves empty",
+			Options{},
+			"",
+			"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.opts.applyPreset()
+			if tt.opts.AliasGenerator != tt.expectedAlias {
+				t.Errorf("AliasGenerator = %q, want %q", tt.opts.AliasGenerator, tt.expectedAlias)
+			}
+			if tt.opts.EnumStyle != tt.expectedEnumStyle {
+				t.Errorf("EnumStyle = %q, want %q", tt.opts.EnumStyle, tt.expectedEnumStyle)
+			}
+		})
+	}
+}

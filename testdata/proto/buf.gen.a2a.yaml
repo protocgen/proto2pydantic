@@ -1,0 +1,7 @@
+version: v2
+plugins:
+  - local: protoc-gen-proto2pydantic
+    out: ../golden
+    opt:
+      - preset=a2a
+      - output_file=test_a2a_pydantic.py
