@@ -104,7 +104,7 @@ func extractConstraints(field *protogen.Field) *FieldConstraints {
 	}
 
 	// String constraints
-	if sr := rules.GetString_(); sr != nil {
+	if sr := rules.GetString(); sr != nil {
 		if sr.MinLen != nil {
 			c.MinLength = sr.MinLen
 		}

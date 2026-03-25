@@ -502,12 +502,11 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 		g.P("import base64")
 	}
 
-	baseClass := "BaseModel"
 	if opts.BaseClass != "" && opts.BaseClass != "BaseModel" {
 		// Custom base class: import from its module
 		// e.g. "a2a._base.A2ABaseModel" -> from a2a._base import A2ABaseModel
 		parts := strings.Split(opts.BaseClass, ".")
-		baseClass = parts[len(parts)-1]
+		baseClass := parts[len(parts)-1]
 		modulePath := strings.Join(parts[:len(parts)-1], ".")
 		g.P("from ", modulePath, " import ", baseClass)
 		if needsFieldSerializer {
@@ -523,8 +522,9 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 		}
 	}
 
-	// Import alias generator dependencies
-	if opts.AliasGenerator != "" {
+	// Import alias generator dependencies (only needed when no custom base class)
+	hasCustomBase := opts.BaseClass != "" && opts.BaseClass != "BaseModel"
+	if opts.AliasGenerator != "" && !hasCustomBase {
 		g.P("from pydantic import ConfigDict")
 		if opts.AliasGenerator == "camel" {
 			g.P("from pydantic.alias_generators import to_camel")
@@ -636,10 +636,13 @@ func writeEnum(g *protogen.GeneratedFile, enum PydanticEnum) {
 // writeModel writes a Pydantic BaseModel class.
 func writeModel(g *protogen.GeneratedFile, model PydanticModel, opts *Options) {
 	// Determine base class name
-	baseClass := "BaseModel"
-	if opts.BaseClass != "" && opts.BaseClass != "BaseModel" {
+	hasCustomBase := opts.BaseClass != "" && opts.BaseClass != "BaseModel"
+	var baseClass string
+	if hasCustomBase {
 		parts := strings.Split(opts.BaseClass, ".")
 		baseClass = parts[len(parts)-1]
+	} else {
+		baseClass = "BaseModel"
 	}
 
 	g.P("class ", model.Name, "(", baseClass, "):")
@@ -650,8 +653,10 @@ func writeModel(g *protogen.GeneratedFile, model PydanticModel, opts *Options) {
 
 	hasContent := false
 
-	// Write model_config if alias_generator is set
-	if opts.AliasGenerator == "camel" {
+	// Write model_config if alias_generator is set and no custom base class.
+	// When a custom base class is provided, it is expected to handle
+	// model_config (alias_generator, populate_by_name, etc.) itself.
+	if opts.AliasGenerator == "camel" && !hasCustomBase {
 		g.P("    model_config = ConfigDict(")
 		g.P("        populate_by_name=True,")
 		g.P("        alias_generator=to_camel,")
@@ -674,7 +679,8 @@ func writeModel(g *protogen.GeneratedFile, model PydanticModel, opts *Options) {
 	}
 
 	// Write to_proto_json() convenience method when alias_generator is set
-	if opts.AliasGenerator == "camel" {
+	// and no custom base class (base class may provide its own serialization).
+	if opts.AliasGenerator == "camel" && !hasCustomBase {
 		if hasContent {
 			g.P()
 		}
