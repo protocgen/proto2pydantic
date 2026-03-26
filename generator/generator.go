@@ -59,6 +59,23 @@ type PydanticEnumValue struct {
 	Value string // string value for str enum
 }
 
+// pythonKeywords is the set of Python keywords and builtins that cannot be used
+// as field names in generated Pydantic models.
+var pythonKeywords = map[string]bool{
+	"False": true, "None": true, "True": true, "and": true, "as": true,
+	"assert": true, "async": true, "await": true, "break": true, "class": true,
+	"continue": true, "def": true, "del": true, "elif": true, "else": true,
+	"except": true, "finally": true, "for": true, "from": true, "global": true,
+	"if": true, "import": true, "in": true, "is": true, "lambda": true,
+	"nonlocal": true, "not": true, "or": true, "pass": true, "raise": true,
+	"return": true, "try": true, "while": true, "with": true, "yield": true,
+	// builtins commonly shadowed
+	"list": true, "dict": true, "set": true, "type": true,
+	"input": true, "print": true, "format": true, "map": true, "filter": true,
+	"hash": true, "len": true, "range": true, "str": true, "int": true,
+	"float": true, "bool": true, "bytes": true, "object": true, "property": true,
+}
+
 // PydanticModel represents a Pydantic BaseModel class.
 type PydanticModel struct {
 	Name            string
@@ -79,6 +96,7 @@ type PydanticOneOf struct {
 // PydanticField represents a single field in a Pydantic model.
 type PydanticField struct {
 	Name        string            // snake_case Python name
+	Alias       string            // explicit alias when field name was escaped (e.g., list_ -> list)
 	PythonType  string            // e.g. "str", "int", "list[str]", "MyModel"
 	Required    bool              // from field_behavior REQUIRED
 	Optional    bool              // from proto3 optional keyword
@@ -243,8 +261,18 @@ func processMessage(msg *protogen.Message, pyFile *PydanticFile) PydanticModel {
 
 // processField converts a protobuf field descriptor to a PydanticField.
 func processField(field *protogen.Field, pyFile *PydanticFile) PydanticField {
+	fieldName := toSnakeCase(string(field.Desc.Name()))
+
+	// Escape Python keywords by appending underscore
+	var alias string
+	if pythonKeywords[fieldName] {
+		alias = fieldName
+		fieldName = fieldName + "_"
+	}
+
 	pyField := PydanticField{
-		Name:        toSnakeCase(string(field.Desc.Name())),
+		Name:        fieldName,
+		Alias:       alias,
 		Description: cleanComment(field.Comments.Leading.String()),
 		Required:    isRequired(field),
 		OutputOnly:  isOutputOnly(field),
@@ -528,6 +556,12 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 		g.P("from pydantic import ConfigDict")
 		if opts.AliasGenerator == "camel" {
 			g.P("from pydantic.alias_generators import to_camel")
+		} else if strings.Contains(opts.AliasGenerator, ".") {
+			// Custom alias generator: "module.path.func" -> from module.path import func
+			lastDot := strings.LastIndex(opts.AliasGenerator, ".")
+			modulePath := opts.AliasGenerator[:lastDot]
+			funcName := opts.AliasGenerator[lastDot+1:]
+			g.P("from ", modulePath, " import ", funcName)
 		}
 	}
 
@@ -656,10 +690,15 @@ func writeModel(g *protogen.GeneratedFile, model PydanticModel, opts *Options) {
 	// Write model_config if alias_generator is set and no custom base class.
 	// When a custom base class is provided, it is expected to handle
 	// model_config (alias_generator, populate_by_name, etc.) itself.
-	if opts.AliasGenerator == "camel" && !hasCustomBase {
+	if opts.AliasGenerator != "" && !hasCustomBase {
+		aliasFunc := "to_camel"
+		if opts.AliasGenerator != "camel" && strings.Contains(opts.AliasGenerator, ".") {
+			lastDot := strings.LastIndex(opts.AliasGenerator, ".")
+			aliasFunc = opts.AliasGenerator[lastDot+1:]
+		}
 		g.P("    model_config = ConfigDict(")
 		g.P("        populate_by_name=True,")
-		g.P("        alias_generator=to_camel,")
+		g.P("        alias_generator=", aliasFunc, ",")
 		g.P("    )")
 		g.P()
 		hasContent = true
@@ -678,9 +717,9 @@ func writeModel(g *protogen.GeneratedFile, model PydanticModel, opts *Options) {
 		hasContent = true
 	}
 
-	// Write to_proto_json() convenience method when alias_generator is set
-	// and no custom base class (base class may provide its own serialization).
-	if opts.AliasGenerator == "camel" && !hasCustomBase {
+	// Write to_proto_json() convenience method when alias_generator is set.
+	// Generated regardless of base class since not all base classes provide this.
+	if opts.AliasGenerator != "" {
 		if hasContent {
 			g.P()
 		}
@@ -751,6 +790,11 @@ func writeField(g *protogen.GeneratedFile, field PydanticField) {
 		fieldArgs = append(fieldArgs, "exclude=True")
 	}
 
+	// Explicit alias for escaped keyword fields
+	if field.Alias != "" {
+		fieldArgs = append(fieldArgs, fmt.Sprintf("alias='%s'", field.Alias))
+	}
+
 	// Description
 	if field.Description != "" {
 		fieldArgs = append(fieldArgs, fmt.Sprintf("description='%s'", escapeString(field.Description)))
@@ -758,7 +802,7 @@ func writeField(g *protogen.GeneratedFile, field PydanticField) {
 
 	// If we only have a simple default and no other args, use shorthand
 	hasExtras := (field.Constraints != nil && field.Constraints.HasConstraints()) ||
-		field.OutputOnly || field.Description != ""
+		field.OutputOnly || field.Description != "" || field.Alias != ""
 
 	if !field.Required && !hasExtras {
 		// Simple: field_name: type = default

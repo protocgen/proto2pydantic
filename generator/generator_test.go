@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -311,6 +312,69 @@ func TestApplyPreset(t *testing.T) {
 			}
 			if tt.opts.EnumStyle != tt.expectedEnumStyle {
 				t.Errorf("EnumStyle = %q, want %q", tt.opts.EnumStyle, tt.expectedEnumStyle)
+			}
+		})
+	}
+}
+
+func TestPythonKeywordEscaping(t *testing.T) {
+	tests := []struct {
+		name          string
+		fieldName     string
+		expectEscaped bool
+	}{
+		{"list is keyword", "list", true},
+		{"dict is keyword", "dict", true},
+		{"from is keyword", "from", true},
+		{"type is keyword", "type", true},
+		{"name is not keyword", "name", false},
+		{"task_id is not keyword", "task_id", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isKw := pythonKeywords[tt.fieldName]
+			if isKw != tt.expectEscaped {
+				t.Errorf("pythonKeywords[%q] = %v, want %v", tt.fieldName, isKw, tt.expectEscaped)
+			}
+		})
+	}
+}
+
+func TestCustomAliasGeneratorParsing(t *testing.T) {
+	tests := []struct {
+		name       string
+		generator  string
+		wantModule string
+		wantFunc   string
+	}{
+		{
+			"module.func format",
+			"a2a._base.to_camel_custom",
+			"a2a._base",
+			"to_camel_custom",
+		},
+		{
+			"nested module",
+			"my.very.deep.module.custom_alias",
+			"my.very.deep.module",
+			"custom_alias",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lastDot := strings.LastIndex(tt.generator, ".")
+			if lastDot < 0 {
+				t.Fatal("expected dot in generator string")
+			}
+			module := tt.generator[:lastDot]
+			funcName := tt.generator[lastDot+1:]
+			if module != tt.wantModule {
+				t.Errorf("module = %q, want %q", module, tt.wantModule)
+			}
+			if funcName != tt.wantFunc {
+				t.Errorf("func = %q, want %q", funcName, tt.wantFunc)
 			}
 		})
 	}
