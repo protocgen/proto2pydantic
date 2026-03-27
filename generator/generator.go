@@ -248,9 +248,12 @@ func processMessage(msg *protogen.Message, pyFile *PydanticFile) PydanticModel {
 		var types []string
 		seen := make(map[string]bool)
 		for _, f := range fields {
-			if !seen[f.PythonType] {
-				types = append(types, f.PythonType)
-				seen[f.PythonType] = true
+			// Strip trailing " | None" from individual member types
+			// since the union will add a single "| None" at the end
+			memberType := strings.TrimSuffix(f.PythonType, " | None")
+			if !seen[memberType] {
+				types = append(types, memberType)
+				seen[memberType] = true
 			}
 		}
 
@@ -316,6 +319,20 @@ func processField(field *protogen.Field, pyFile *PydanticFile) PydanticField {
 	} else if pyField.IsMap {
 		pyField.Default = "None"
 		pyField.PythonType = pyField.PythonType + " | None"
+	} else if field.Desc.Kind() == protoreflect.MessageKind || field.Desc.Kind() == protoreflect.GroupKind {
+		// Proto3 message fields are implicitly optional (can be None)
+		pyField.Default = "None"
+		pyField.PythonType = pyField.PythonType + " | None"
+	} else if field.Desc.Kind() == protoreflect.EnumKind {
+		// Proto3 enum fields default to their zero value, not None
+		enumDesc := field.Desc.Enum()
+		zeroVal := enumDesc.Values().ByNumber(0)
+		if zeroVal != nil {
+			pyField.Default = pyField.PythonType + "." + string(zeroVal.Name())
+		} else {
+			// Fallback: use first declared value
+			pyField.Default = pyField.PythonType + "." + string(enumDesc.Values().Get(0).Name())
+		}
 	} else {
 		pyField.Default = scalarDefault(field.Desc.Kind())
 	}

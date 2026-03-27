@@ -58,12 +58,12 @@ class User(BaseModel):
     age: int = Field(default=0, le=150, description='Age of the user.')
     score: float = Field(default=0.0, le=100, description='Score with floating-point constraints.')
     tags: list[str] | None = Field(default=None, min_length=1, max_length=20, description='Tags with repeated constraints.')
-    home_address: Address = Field(default=None, description='Home address (nested message).')
+    home_address: Address | None = Field(default=None, description='Home address (nested message).')
     other_addresses: list[Address] | None = Field(default=None, description='Multiple addresses (repeated message).')
     metadata: dict[str, str] | None = Field(default=None, description='Metadata as a map.')
-    extra_data: dict[str, Any] = Field(default=None, description='Arbitrary structured data.')
-    created_at: datetime = Field(default=None, exclude=True, description='When the user was created.')
-    status: TaskStatus = Field(default=None, description='Current status.')
+    extra_data: dict[str, Any] | None = Field(default=None, description='Arbitrary structured data.')
+    created_at: datetime | None = Field(default=None, exclude=True, description='When the user was created.')
+    status: TaskStatus = Field(default=TaskStatus.TASK_STATUS_UNSPECIFIED, description='Current status.')
     profile_url: str = Field(default='', description='Profile URL with URI validation.')
     nickname: str | None = Field(default=None, description='Optional nickname (proto3 optional keyword).')
     username: str = Field(..., description='Username required via buf/validate.')
@@ -108,7 +108,7 @@ class CreateUserResponse(BaseModel):
         alias_generator=to_camel,
     )
 
-    user: User = Field(default=None, exclude=True)
+    user: User | None = Field(default=None, exclude=True)
 
     def to_proto_json(self) -> dict:
         """Serialize to a ProtoJSON-compatible dict (camelCase keys, no None values)."""
