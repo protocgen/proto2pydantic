@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
-from typing import Any
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 from pydantic import BaseModel, Field, field_serializer
 
@@ -33,7 +35,7 @@ class User(BaseModel):
     """User exercises field_behavior, buf/validate, nested messages, maps, repeated fields, oneofs, well-known types, and OUTPUT_ONLY."""
 
     id: str = Field(default='', exclude=True, description='Server-assigned unique identifier.')
-    email: str = Field(..., description='The user\'s email address.')
+    email: str = Field(..., description="The user's email address.")
     display_name: str = Field(..., min_length=1, max_length=200, description='Display name.')
     age: int = Field(default=0, le=150, description='Age of the user.')
     score: float = Field(default=0.0, le=100, description='Score with floating-point constraints.')
@@ -47,7 +49,7 @@ class User(BaseModel):
     profile_url: str = Field(default='', description='Profile URL with URI validation.')
     nickname: str | None = Field(default=None, description='Optional nickname (proto3 optional keyword).')
     username: str = Field(..., description='Username required via buf/validate.')
-    contact: str | str | None = None
+    contact: str | None = None
 
     @field_serializer('created_at')
     @classmethod
@@ -55,7 +57,7 @@ class User(BaseModel):
         """Serialize datetime to RFC 3339 with UTC 'Z' suffix for ProtoJSON."""
         if v is None:
             return None
-        return v.strftime('%Y-%m-%dT%H:%M:%S.') + f'{v.microsecond:06d}'[:3] + 'Z'
+        return v.strftime('%Y-%m-%dT%H:%M:%S.') + f'{v.microsecond // 1000:03d}' + 'Z'
 
 
 
@@ -73,9 +75,13 @@ class CreateUserResponse(BaseModel):
 
 
 __all__ = [
-    "TaskStatus",
-    "Address",
-    "User",
-    "CreateUserRequest",
-    "CreateUserResponse",
+    'Address',
+    'CreateUserRequest',
+    'CreateUserResponse',
+    'TaskStatus',
+    'User',
 ]
+
+
+# Rebuild models that use TYPE_CHECKING imports (forward references)
+User.model_rebuild()
