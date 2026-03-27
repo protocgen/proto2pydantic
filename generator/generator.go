@@ -4,6 +4,7 @@ package generator
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -245,8 +246,12 @@ func processMessage(msg *protogen.Message, pyFile *PydanticFile) PydanticModel {
 		}
 
 		var types []string
+		seen := make(map[string]bool)
 		for _, f := range fields {
-			types = append(types, f.PythonType)
+			if !seen[f.PythonType] {
+				types = append(types, f.PythonType)
+				seen[f.PythonType] = true
+			}
 		}
 
 		pyModel.OneOfs = append(pyModel.OneOfs, PydanticOneOf{
@@ -491,27 +496,10 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 	g.P("from __future__ import annotations")
 	g.P()
 
-	// Conditional imports
-	if pyFile.Imports["datetime"] || pyFile.Imports["timedelta"] {
-		var dtImports []string
-		if pyFile.Imports["datetime"] {
-			dtImports = append(dtImports, "datetime")
-		}
-		if pyFile.Imports["timedelta"] {
-			dtImports = append(dtImports, "timedelta")
-		}
-		g.P("from datetime import ", strings.Join(dtImports, ", "))
-	}
+	// === Imports ===
+	// Follow isort: from __future__ (already above), stdlib, blank, third-party/local
 
-	g.P("from enum import Enum")
-	g.P()
-
-	if pyFile.Imports["Any"] {
-		g.P("from typing import Any")
-		g.P()
-	}
-
-	// Import the base class and field_serializer if needed
+	// Determine what's needed
 	needsFieldSerializer := false
 	needsBase64 := false
 	for _, model := range pyFile.Models {
@@ -525,18 +513,44 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 			break
 		}
 	}
+	hasCustomBase := opts.BaseClass != "" && opts.BaseClass != "BaseModel"
 
+	// Group 1: stdlib (alphabetical)
 	if needsBase64 {
 		g.P("import base64")
 	}
+	needsDatetime := pyFile.Imports["datetime"] || pyFile.Imports["timedelta"]
+	g.P("from enum import Enum")
+	var typingImports []string
+	if needsDatetime {
+		typingImports = append(typingImports, "TYPE_CHECKING")
+	}
+	if pyFile.Imports["Any"] {
+		typingImports = append(typingImports, "Any")
+	}
+	// Note: isort convention puts ALL_CAPS names first, so TYPE_CHECKING before Any
+	if len(typingImports) > 0 {
+		g.P("from typing import ", strings.Join(typingImports, ", "))
+	}
+	g.P()
 
-	if opts.BaseClass != "" && opts.BaseClass != "BaseModel" {
-		// Custom base class: import from its module
-		// e.g. "a2a._base.A2ABaseModel" -> from a2a._base import A2ABaseModel
-		parts := strings.Split(opts.BaseClass, ".")
-		baseClass := parts[len(parts)-1]
-		modulePath := strings.Join(parts[:len(parts)-1], ".")
-		g.P("from ", modulePath, " import ", baseClass)
+	// TYPE_CHECKING block for stdlib type-only imports
+	if needsDatetime {
+		g.P()
+		g.P("if TYPE_CHECKING:")
+		var dtImports []string
+		if pyFile.Imports["datetime"] {
+			dtImports = append(dtImports, "datetime")
+		}
+		if pyFile.Imports["timedelta"] {
+			dtImports = append(dtImports, "timedelta")
+		}
+		g.P("    from datetime import ", strings.Join(dtImports, ", "))
+		g.P()
+	}
+
+	// Group 2: third-party (pydantic)
+	if hasCustomBase {
 		if needsFieldSerializer {
 			g.P("from pydantic import Field, field_serializer")
 		} else {
@@ -551,18 +565,29 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 	}
 
 	// Import alias generator dependencies (only needed when no custom base class)
-	hasCustomBase := opts.BaseClass != "" && opts.BaseClass != "BaseModel"
 	if opts.AliasGenerator != "" && !hasCustomBase {
 		g.P("from pydantic import ConfigDict")
 		if opts.AliasGenerator == "camel" {
 			g.P("from pydantic.alias_generators import to_camel")
-		} else if strings.Contains(opts.AliasGenerator, ".") {
-			// Custom alias generator: "module.path.func" -> from module.path import func
-			lastDot := strings.LastIndex(opts.AliasGenerator, ".")
-			modulePath := opts.AliasGenerator[:lastDot]
-			funcName := opts.AliasGenerator[lastDot+1:]
-			g.P("from ", modulePath, " import ", funcName)
 		}
+	}
+
+	// Group 3: local imports (custom base class, custom alias generator)
+	hasLocalImports := hasCustomBase || (opts.AliasGenerator != "" && !hasCustomBase && strings.Contains(opts.AliasGenerator, "."))
+	if hasLocalImports {
+		g.P()
+	}
+	if hasCustomBase {
+		parts := strings.Split(opts.BaseClass, ".")
+		baseClass := parts[len(parts)-1]
+		modulePath := strings.Join(parts[:len(parts)-1], ".")
+		g.P("from ", modulePath, " import ", baseClass)
+	}
+	if opts.AliasGenerator != "" && !hasCustomBase && strings.Contains(opts.AliasGenerator, ".") {
+		lastDot := strings.LastIndex(opts.AliasGenerator, ".")
+		modulePath := opts.AliasGenerator[:lastDot]
+		funcName := opts.AliasGenerator[lastDot+1:]
+		g.P("from ", modulePath, " import ", funcName)
 	}
 
 	g.P()
@@ -580,6 +605,9 @@ func writeFile(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 
 	// Write __all__ exports
 	writeAllExports(g, pyFile)
+
+	// Write model_rebuild() calls for models that use TYPE_CHECKING imports
+	writeModelRebuilds(g, pyFile)
 }
 
 // topologicalSort orders models so that dependencies come before dependents.
@@ -633,11 +661,12 @@ func topologicalSort(models []PydanticModel) []PydanticModel {
 func writeAllExports(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 	var names []string
 	for _, enum := range pyFile.Enums {
-		names = append(names, fmt.Sprintf("%q", enum.Name))
+		names = append(names, fmt.Sprintf("'%s'", enum.Name))
 	}
 	for _, model := range pyFile.Models {
-		names = append(names, fmt.Sprintf("%q", model.Name))
+		names = append(names, fmt.Sprintf("'%s'", model.Name))
 	}
+	sort.Strings(names)
 	if len(names) > 0 {
 		g.P()
 		g.P("__all__ = [")
@@ -648,11 +677,31 @@ func writeAllExports(g *protogen.GeneratedFile, pyFile *PydanticFile) {
 	}
 }
 
+// writeModelRebuilds emits model_rebuild() calls for models that reference
+// types imported under TYPE_CHECKING (e.g. datetime). This allows Pydantic
+// to resolve forward references at runtime.
+func writeModelRebuilds(g *protogen.GeneratedFile, pyFile *PydanticFile) {
+	var rebuilds []string
+	for _, model := range pyFile.Models {
+		if len(model.TimestampFields) > 0 {
+			rebuilds = append(rebuilds, model.Name)
+		}
+	}
+	if len(rebuilds) > 0 {
+		g.P()
+		g.P()
+		g.P("# Rebuild models that use TYPE_CHECKING imports (forward references)")
+		for _, name := range rebuilds {
+			g.P(name, ".model_rebuild()")
+		}
+	}
+}
+
 // writeEnum writes a Python Enum class.
 func writeEnum(g *protogen.GeneratedFile, enum PydanticEnum) {
 	g.P("class ", enum.Name, "(str, Enum):")
 	if enum.Description != "" {
-		g.P(`    """`, enum.Description, `"""`)
+		g.P(`    """`, ensureTrailingPeriod(enum.Description), `"""`)
 	}
 	g.P()
 
@@ -681,7 +730,7 @@ func writeModel(g *protogen.GeneratedFile, model PydanticModel, opts *Options) {
 
 	g.P("class ", model.Name, "(", baseClass, "):")
 	if model.Description != "" {
-		g.P(`    """`, model.Description, `"""`)
+		g.P(`    """`, ensureTrailingPeriod(model.Description), `"""`)
 	}
 	g.P()
 
@@ -739,7 +788,7 @@ func writeModel(g *protogen.GeneratedFile, model PydanticModel, opts *Options) {
 		g.P(`        """Serialize datetime to RFC 3339 with UTC 'Z' suffix for ProtoJSON."""`)
 		g.P("        if v is None:")
 		g.P("            return None")
-		g.P("        return v.strftime('%Y-%m-%dT%H:%M:%S.') + f'{v.microsecond:06d}'[:3] + 'Z'")
+		g.P("        return v.strftime('%Y-%m-%dT%H:%M:%S.') + f'{v.microsecond // 1000:03d}' + 'Z'")
 		g.P()
 		hasContent = true
 	}
@@ -797,7 +846,12 @@ func writeField(g *protogen.GeneratedFile, field PydanticField) {
 
 	// Description
 	if field.Description != "" {
-		fieldArgs = append(fieldArgs, fmt.Sprintf("description='%s'", escapeString(field.Description)))
+		if strings.Contains(field.Description, "'") {
+			// Use double quotes when description contains single quotes (ruff Q003)
+			fieldArgs = append(fieldArgs, fmt.Sprintf("description=\"%s\"", strings.ReplaceAll(field.Description, "\"", "\\\"")))
+		} else {
+			fieldArgs = append(fieldArgs, fmt.Sprintf("description='%s'", field.Description))
+		}
 	}
 
 	// If we only have a simple default and no other args, use shorthand
@@ -872,4 +926,17 @@ func cleanComment(s string) string {
 // escapeString escapes single quotes in a string for Python string literals.
 func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
+}
+
+// ensureTrailingPeriod ensures a docstring ends with proper punctuation (PEP 257).
+func ensureTrailingPeriod(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+	last := s[len(s)-1]
+	if last != '.' && last != '?' && last != '!' {
+		return s + "."
+	}
+	return s
 }
