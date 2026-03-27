@@ -53,26 +53,4 @@ jobs:
       base64-subjects: ${{ needs.goreleaser.outputs.hashes }}
       upload-assets: true
 
-  buf-plugin:
-    runs-on: ubuntu-latest
-    needs: goreleaser
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1
-        with:
-          github_token: ${{ github.token }}
-
-      - name: Docker build
-        run: |
-          docker build -t "plugins.buf.build/protocgen/proto2pydantic:${GITHUB_REF_NAME#v}" .
-
-      - name: Push to BSR
-        if: env.BUF_TOKEN != ''
-        env:
-          BUF_TOKEN: ${{ secrets.BUF_TOKEN }}
-        run: |
-          echo "$BUF_TOKEN" | buf registry login --token-stdin
-          buf beta registry plugin push \
-            --visibility public \
-            --image "plugins.buf.build/protocgen/proto2pydantic:${GITHUB_REF_NAME#v}"
