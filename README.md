@@ -1,277 +1,62 @@
-# proto2pydantic
+# proto2pydantic (Archived)
 
-[![CI](https://github.com/protocgen/proto2pydantic/actions/workflows/ci.yml/badge.svg)](https://github.com/protocgen/proto2pydantic/actions/workflows/ci.yml)
-[![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
-[![Go Report Card](https://goreportcard.com/badge/github.com/protocgen/proto2pydantic)](https://goreportcard.com/report/github.com/protocgen/proto2pydantic)
+> **This project has been archived.** All functionality has been absorbed into [proto2type](https://github.com/protocgen/proto2type).
 
-A `protoc` plugin that generates [Pydantic v2](https://docs.pydantic.dev/) `BaseModel` classes from Protocol Buffer definitions — with **`google.api.field_behavior`** support.
+## Migration Guide
 
-## Why this exists
+Replace your `buf.gen.yaml` plugin entry:
 
-Proto3 has no native `required` keyword. Every field silently accepts zero values, which means proto-generated models can't enforce that critical fields like `message_id` or `url` are actually provided.
-
-Google's solution is [`google.api.field_behavior`](https://google.aip.dev/203) — annotations that mark fields as `REQUIRED`, `OPTIONAL`, `OUTPUT_ONLY`, etc:
-
-```protobuf
-string url = 1 [(google.api.field_behavior) = REQUIRED];  // must be provided
-string tenant = 2;                                         // optional, zero-value OK
-optional int32 history_length = 3;                         // explicitly optional
-```
-
-**The problem**: no existing proto-to-Pydantic tool reads these annotations.
-
-| Tool | Reads `field_behavior`? |
-|---|:-:|
-| [`protobuf-to-pydantic`](https://github.com/so1n/protobuf_to_pydantic) | ❌ Uses PGV or custom `p2p:` comments |
-| [`protoc-gen-pydantic`](https://pkg.go.dev/github.com/mercurial-harsh/protoc-gen-pydantic) | ❌ Uses `optional` keyword only |
-| [`protobuf-pydantic-gen`](https://github.com/danielgtaylor/python-betterproto) | ❌ Basic mapping only |
-| [`python-betterproto`](https://github.com/danielgtaylor/python-betterproto) | ❌ Uses `optional` keyword only |
-| **proto2pydantic** | ✅ |
-
-This means projects like [A2A](https://github.com/a2aproject/A2A) that use `field_behavior` annotations extensively have had to go through an intermediate JSON Schema step to get proper validation in Pydantic. proto2pydantic eliminates that indirection.
-
-## Features
-
-- 🔒 **`field_behavior` support** — `REQUIRED` → required Pydantic field, `OUTPUT_ONLY` → `exclude=True`
-- ✅ **`buf/validate` support** — proto validation rules → Pydantic `Field()` constraints
-- 🐍 **Idiomatic Python** — snake_case fields, `str` Enums, `oneof` → union types
-- 📦 **Well-known types** — `Struct` → `dict[str, Any]`, `Timestamp` → `datetime`
-- 🔌 **buf native** — works as a local or remote buf plugin
-- ⚙️ **Configurable** — custom base class, camelCase aliases, output filename (see [CONFIG.md](CONFIG.md) for full reference)
-- 🔄 **Topological sort** — models ordered so dependencies are defined before use
-- 📋 **`__all__` exports** — generated files include a clean public API list
-- 🅰️ **A2A / ProtoJSON preset** — `preset=a2a` for full ProtoJSON compatibility (camelCase, raw enums, `to_proto_json()`, RFC 3339 timestamps, base64 bytes)
-
-## Install
-
-```bash
-go install github.com/protocgen/proto2pydantic@latest
-```
-
-## Usage
-
-### With buf
+### Before (proto2pydantic)
 
 ```yaml
-# buf.gen.yaml
 version: v2
 plugins:
   - local: protoc-gen-proto2pydantic
-    out: src/types
+    out: gen/python
     opt:
-      - preset=a2a
-      - base_class=a2a._base.A2ABaseModel
-      - output_file=types.py
+      - alias_generator=camel
+      - enum_style=raw
 ```
 
-```bash
-buf generate
-```
-
-### With protoc
-
-```bash
-protoc --proto2pydantic_out=./output \
-       --proto2pydantic_opt=base_class=myapp.BaseModel \
-       your_service.proto
-```
-
-## How it works
-
-```
-.proto file → protoc/buf → proto2pydantic → .py with Pydantic models
-```
-
-Given:
-```protobuf
-message AgentInterface {
-  string url = 1 [(google.api.field_behavior) = REQUIRED];
-  string protocol_binding = 2 [(google.api.field_behavior) = REQUIRED];
-  string tenant = 3;
-  string protocol_version = 4 [(google.api.field_behavior) = REQUIRED];
-}
-```
-
-Generates:
-```python
-class AgentInterface(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-        alias_generator=to_camel,
-    )
-
-    url: str = Field(..., description='The URL where this interface is available.')
-    protocol_binding: str = Field(..., description='The protocol binding supported at this URL.')
-    tenant: str = Field(default='', description='Tenant ID.')
-    protocol_version: str = Field(..., description='The version of the A2A protocol.')
-```
-
-- `Field(...)` = **required** — Pydantic raises `ValidationError` if missing
-- `Field(default='')` = proto3 zero-value default — field is optional
-
-## Validation with `buf/validate`
-
-proto2pydantic reads [`buf/validate`](https://github.com/bufbuild/protovalidate) (the successor to protoc-gen-validate) and maps constraints to Pydantic `Field()` arguments:
-
-```protobuf
-import "buf/validate/validate.proto";
-
-message CreateUserRequest {
-  string email = 1 [
-    (google.api.field_behavior) = REQUIRED,
-    (buf.validate.field).string.email = true
-  ];
-  string name = 2 [
-    (buf.validate.field).string = {min_len: 1, max_len: 100}
-  ];
-  int32 age = 3 [
-    (buf.validate.field).int32 = {gte: 0, lte: 150}
-  ];
-  repeated string tags = 4 [
-    (buf.validate.field).repeated = {min_items: 1, max_items: 10}
-  ];
-}
-```
-
-Generates:
-```python
-class CreateUserRequest(BaseModel):
-    email: str = Field(...)
-    name: str = Field(default='', min_length=1, max_length=100)
-    age: int = Field(default=0, ge=0, le=150)
-    tags: list[str] | None = Field(default=None, min_length=1, max_length=10)
-```
-
-| `buf/validate` rule | Pydantic `Field()` |
-|---|---|
-| `required` | `Field(...)` — no default, field is required |
-| `string.min_len` | `min_length=` |
-| `string.max_len` | `max_length=` |
-| `string.pattern` | `pattern=` |
-| `int32.gte` / `float.gte` | `ge=` |
-| `int32.lte` / `float.lte` | `le=` |
-| `int32.gt` / `float.gt` | `gt=` |
-| `int32.lt` / `float.lt` | `lt=` |
-| `repeated.min_items` | `min_length=` |
-| `repeated.max_items` | `max_length=` |
-
-## `field_behavior` annotations
-
-| Annotation | Effect |
-|---|---|
-| `REQUIRED` | No default value → Pydantic requires the field |
-| `OUTPUT_ONLY` | `Field(exclude=True)` → excluded from `model_dump()` |
-| `OPTIONAL` | Treated as proto3 default (zero-value) |
-| _(none)_ | proto3 zero-value default |
-
-## Options
-
-| Option | Description | Example |
-|---|---|---|
-| `preset` | Preset configuration. `a2a` auto-sets `alias_generator=camel` + `enum_style=raw` for ProtoJSON | `a2a` |
-| `base_class` | Custom base class for models | `a2a._base.A2ABaseModel` |
-| `alias_generator` | Add `model_config` with Pydantic's [`to_camel`](https://docs.pydantic.dev/latest/api/alias_generators/#pydantic.alias_generators.to_camel) for ProtoJSON-compatible lowerCamelCase aliases (`populate_by_name=True` allows both snake_case and camelCase input) | `camel` |
-| `enum_style` | Enum generation style. `raw` preserves original proto names (e.g., `TASK_STATE_COMPLETED`) and includes `UNSPECIFIED` values for ProtoJSON compatibility. Default strips prefix and lowercases | `raw` |
-| `output_file` | Override output filename | `types.py` |
-| `strip_proto_suffix` | Use `foo.py` instead of `foo_pb2_pydantic.py` | `true` |
-| `description` | Override module-level docstring | `A2A type definitions` |
-
-## Type Mapping
-
-| Proto | Python |
-|---|---|
-| `string` | `str` |
-| `int32`, `int64`, etc. | `int` |
-| `float`, `double` | `float` |
-| `bool` | `bool` |
-| `bytes` | `bytes` (with base64 `@field_serializer` for ProtoJSON) |
-| `repeated T` | `list[T]` |
-| `map<K, V>` | `dict[K, V]` |
-| `optional T` | `T \| None` |
-| `oneof` | `T1 \| T2 \| ... \| None` |
-| `google.protobuf.Struct` | `dict[str, Any]` |
-| `google.protobuf.Timestamp` | `datetime` (with RFC 3339 `@field_serializer` for ProtoJSON) |
-| `google.protobuf.Value` | `Any` |
-| Enum (default) | `str` Enum (prefix-stripped, lowercase) |
-| Enum (`enum_style=raw`) | `str` Enum (original proto names, e.g., `TASK_STATE_COMPLETED`) |
-
-## ProtoJSON / A2A Support
-
-For projects following the [ProtoJSON specification](https://protobuf.dev/programming-guides/json/) (like [A2A](https://github.com/a2aproject/A2A) per [ADR-001](https://github.com/a2aproject/A2A/blob/main/adrs/adr-001-protojson-serialization.md)), use the `preset=a2a` option:
+### After (proto2type)
 
 ```yaml
-# buf.gen.yaml
+version: v2
 plugins:
-  - local: protoc-gen-proto2pydantic
-    out: src/types
+  - local: protoc-gen-proto2type
+    out: gen/python
     opt:
+      - lang=python
       - preset=a2a
 ```
 
-This enables:
+Or with explicit options:
 
-| ProtoJSON Requirement | What `preset=a2a` does |
-|---|---|
-| camelCase field names | `alias_generator=to_camel` + `populate_by_name=True` |
-| SCREAMING_SNAKE_CASE enums | `enum_style=raw` preserves original proto names |
-| UNSPECIFIED enum values | Included (not skipped) |
-| Null omission | `to_proto_json()` method on every model |
-| Timestamp → RFC 3339 | `@field_serializer` emitting `"2025-01-01T10:00:00.000Z"` |
-| bytes → base64 | `@field_serializer` emitting base64-encoded strings |
-
-### Round-trip example
-
-```python
-from generated_types import Task, TaskState
-
-# Deserialize ProtoJSON → Pydantic (camelCase keys accepted)
-task = Task.model_validate({
-    "id": "task-123",
-    "contextId": "ctx-456",
-    "status": {"state": "TASK_STATE_WORKING"}
-})
-
-# Pythonic access
-assert task.context_id == "ctx-456"
-assert task.status.state == TaskState.TASK_STATE_WORKING
-
-# Serialize back to ProtoJSON (camelCase keys, no None values)
-proto_json = task.to_proto_json()
-# {"id": "task-123", "contextId": "ctx-456", "status": {"state": "TASK_STATE_WORKING"}}
+```yaml
+version: v2
+plugins:
+  - local: protoc-gen-proto2type
+    out: gen/python
+    opt:
+      - lang=python
+      - alias_generator=camel
+      - enum_style=raw
 ```
 
-## Contributing
+## What changed?
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, PR process, and commit signing requirements.
+- All proto2pydantic features are now available in proto2type's Python backend (`lang=python`)
+- The `preset=a2a` option replaces the common `alias_generator=camel` + `enum_style=raw` combination
+- `google.api.field_behavior` and `buf/validate` constraints are fully supported
+- Bug fixes: `gte: 0` constraints no longer silently dropped, enum defaults no longer reference skipped `_UNSPECIFIED` values
+- proto2type also supports Go, Rust, and Kotlin backends from the same proto definitions
 
-## Security & Supply Chain
+## Installation
 
-All release binaries include [SLSA Level 3](https://slsa.dev) provenance. Verify a downloaded binary:
+Install proto2type instead:
 
 ```bash
-# Install the verifier
-go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest
-
-# Verify
-slsa-verifier verify-artifact proto2pydantic_0.2.0_linux_amd64.tar.gz \
-  --provenance-path multiple.intoto.jsonl \
-  --source-uri github.com/protocgen/proto2pydantic
+go install github.com/protocgen/proto2type@latest
 ```
 
-Additional security measures:
-
-| Measure | Details |
-|---|---|
-| **SLSA L3 provenance** | Signed build attestations for every release |
-| **CodeQL** | Semantic code analysis on every PR + weekly scan |
-| **govulncheck** | Go vulnerability database checks in CI |
-| **gosec** | Go security linter in CI |
-| **Signed commits** | Required on `main` via repository ruleset |
-| **Immutable tags** | Release tags cannot be deleted or force-pushed |
-| **Dependabot** | Automated dependency updates (Go modules + GitHub Actions) |
-
-See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
-
-## License
-
-Apache-2.0
+See the [proto2type README](https://github.com/protocgen/proto2type) for full documentation.
